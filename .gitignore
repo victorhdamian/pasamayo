@@ -1,0 +1,21 @@
+.DS_Store
+*.pasamayo
+pasamayo_specs.md
+pasamayo_dilemmas.md
+docs/
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

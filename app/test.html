@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pasamayo — Test Harness</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #0d0d1a; color: #eee; padding: 24px; }
+h1 { color: #e94560; margin-bottom: 4px; font-size: 18px; }
+.sub { color: #555; font-size: 12px; margin-bottom: 20px; }
+.suite { margin-bottom: 20px; }
+.suite-name { color: #aaa; font-size: 13px; font-weight: 700; margin-bottom: 6px; border-bottom: 1px solid #1e1e3a; padding-bottom: 4px; }
+.test { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; font-size: 13px; }
+.badge { min-width: 52px; text-align: center; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.pass { background: #0a3a1a; color: #4caf50; }
+.fail { background: #3a0a0a; color: #e94560; }
+.skip { background: #1e1e3a; color: #555; }
+.label { flex: 1; }
+.err { color: #e94560; font-size: 11px; margin-top: 2px; }
+#summary { margin-top: 20px; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 700; }
+#summary.ok  { background: #0a3a1a; color: #4caf50; }
+#summary.err { background: #3a0a0a; color: #e94560; }
+#run-btn { background: #e94560; color: #fff; border: none; border-radius: 6px; padding: 8px 20px; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 20px; }
+#run-btn:hover { background: #c73652; }
+</style>
+</head>
+<body>
+<h1>🧪 Pasamayo Test Harness</h1>
+<p class="sub">Runs entirely in the browser. No build tools. No dependencies.</p>
+<button id="run-btn">▶ Run all tests</button>
+<div id="output"></div>
+<div id="summary"></div>
+
+<script>
+// ─── Inline the Crypto module from index.html ────────────────────────────────
+const Crypto = (() => {
+  const enc = new TextEncoder(), dec = new TextDecoder();
+
+  function randomIter() {
+    return 500000 + crypto.getRandomValues(new Uint32Array(1))[0] % 300001;
+  }
+
+  async function deriveKey(pw, salt, iter, usage) {
+    const base = await crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: iter, hash: "SHA-512" },
+      base, { name: "AES-GCM", length: 256 }, false, usage
+    );
+  }
+
+  async function deriveHmacKey(pw, salt, iter) {
+    const base = await crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: iter, hash: "SHA-512" },
+      base, { name: "HMAC", hash: "SHA-256", length: 256 }, false, ["sign", "verify"]
+    );
+  }
+
+  function safeEqual(a, b) {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+  }
+
+  function pad(str) {
+    const block = 1024;
+    const total = Math.ceil((str.length + 4) / block) * block;
+    return String(str.length).padStart(4, "0") + str.padEnd(total - 4, " ");
+  }
+
+  function unpad(str) {
+    const len = parseInt(str.slice(0, 4), 10);
+    return str.slice(4, 4 + len);
+  }
+
+  return {
+    async encrypt(pw, data) {
+      const salt  = crypto.getRandomValues(new Uint8Array(16));
+      const hSalt = crypto.getRandomValues(new Uint8Array(16));
+      const iv    = crypto.getRandomValues(new Uint8Array(12));
+      const iter  = randomIter();
+      const plaintext = pad(JSON.stringify(data));
+      const key  = await deriveKey(pw, salt, iter, ["encrypt"]);
+      const ct   = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plaintext));
+      const hmacKey = await deriveHmacKey(pw, hSalt, iter);
+      const mac = await crypto.subtle.sign("HMAC", hmacKey, ct);
+      const out = new Uint8Array(4 + 16 + 16 + 12 + 32 + ct.byteLength);
+      new DataView(out.buffer).setUint32(0, iter);
+      out.set(salt, 4); out.set(hSalt, 20); out.set(iv, 36);
+      out.set(new Uint8Array(mac), 48); out.set(new Uint8Array(ct), 80);
+      return btoa(String.fromCharCode(...out));
+    },
+    async decrypt(pw, ciphertext) {
+      const buf   = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+      const iter  = new DataView(buf.buffer).getUint32(0);
+      const salt  = buf.slice(4, 20);
+      const hSalt = buf.slice(20, 36);
+      const iv    = buf.slice(36, 48);
+      const mac   = buf.slice(48, 80);
+      const ct    = buf.slice(80);
+      const hmacKey = await deriveHmacKey(pw, hSalt, iter);
+      const expected = await crypto.subtle.sign("HMAC", hmacKey, ct);
+      if (!safeEqual(new Uint8Array(expected), mac)) throw new Error("Integrity check failed");
+      const key = await deriveKey(pw, salt, iter, ["decrypt"]);
+      const pt  = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+      return JSON.parse(unpad(dec.decode(pt)));
+    },
+    _pad: pad, _unpad: unpad, _safeEqual: safeEqual, _randomIter: randomIter
+  };
+})();
+
+// ─── Inline the password generator ──────────────────────────────────────────
+const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const LOWER = 'abcdefghijklmnopqrstuvwxyz';
+const NUMS  = '0123456789';
+const SYMS  = '!@#$%^&*()-_=+[]{}|;:,.<>?';
+const AMBIG = /[0O1lI]/g;
+
+function generatePassword({ length = 20, upper = true, lower = true, num = true, sym = true, noAmbig = false } = {}) {
+  let charset = '';
+  if (upper) charset += UPPER;
+  if (lower) charset += LOWER;
+  if (num)   charset += NUMS;
+  if (sym)   charset += SYMS;
+  if (noAmbig) charset = charset.replace(AMBIG, '');
+  if (!charset) return '';
+  const pick = set => { const s = noAmbig ? set.replace(AMBIG,'') : set; return s[crypto.getRandomValues(new Uint32Array(1))[0] % s.length]; };
+  const required = [];
+  if (upper) required.push(pick(UPPER));
+  if (lower) required.push(pick(LOWER));
+  if (num)   required.push(pick(NUMS));
+  if (sym)   required.push(pick(SYMS));
+  const rand = new Uint32Array(length);
+  crypto.getRandomValues(rand);
+  const rest = Array.from(rand).map(v => charset[v % charset.length]);
+  const all = [...required, ...rest.slice(0, length - required.length)];
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  return all.join('');
+}
+
+// ─── Inline the escapeHtml function ────────────────────────────────────────
+function escapeHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// fuzzy match: every character in query must appear in order in target
+function fuzzy(query, target) {
+  if (!query) return { match: true, html: escapeHtml(target) };
+  const q = query.toLowerCase(), t = target.toLowerCase();
+  let qi = 0, html = "";
+  for (let ti = 0; ti < target.length; ti++) {
+    if (qi < q.length && t[ti] === q[qi]) {
+      html += `<span class="match">${escapeHtml(target[ti])}</span>`;
+      qi++;
+    } else {
+      html += escapeHtml(target[ti]);
+    }
+  }
+  return { match: qi === q.length, html };
+}
+
+// ─── Inline the Assistant engine ────────────────────────────────────────────
+function makeAssistant(vault, history) {
+  const rules = [
+    { match: /forgot|lost|recover|wrong.*password|password.*wrong|can.t.*open/i,
+      reply: () => "recovery guidance" },
+    { match: /corrupt|broken|integrity/i,
+      reply: () => "corruption guidance" },
+    { match: /safe|secure|hack|breach/i,
+      reply: () => "security info" },
+    { match: /weak|reuse|duplicate/i,
+      reply: () => analysePasswords(vault) },
+    { match: /health|audit/i,
+      reply: () => auditVault(vault, history) },
+    { match: /^(hi|hello|hey|help)/i,
+      reply: () => "greeting" },
+  ];
+
+  function analysePasswords(v) {
+    if (!v || !Object.keys(v).length) return "vault empty";
+    const entries = Object.entries(v);
+    const weak = entries.filter(([, e]) => e.password.length < 12);
+    const pwMap = {};
+    entries.forEach(([k, e]) => { (pwMap[e.password] = pwMap[e.password] || []).push(k); });
+    const reused = Object.values(pwMap).filter(s => s.length > 1);
+    if (!weak.length && !reused.length) return "all good";
+    const lines = [];
+    if (weak.length) lines.push(`weak:${weak.map(([k]) => k).join(",")}`);
+    if (reused.length) lines.push(`reused:${reused.map(s => s.join("&")).join("|")}`);
+    return lines.join("\n");
+  }
+
+  function auditVault(v, h) {
+    if (!v || !Object.keys(v).length) return "vault empty";
+    const entries = Object.entries(v);
+    const weak = entries.filter(([, e]) => e.password.length < 12);
+    const pwMap = {};
+    entries.forEach(([k, e]) => { (pwMap[e.password] = pwMap[e.password] || []).push(k); });
+    const reused = Object.values(pwMap).filter(s => s.length > 1);
+    const noDate = entries.filter(([, e]) => !e.createdAt);
+    if (!weak.length && !reused.length && !noDate.length) return `healthy:${entries.length},snapshots=${h.length}`;
+    return `issues:weak=${weak.length},reused=${reused.length},nodate=${noDate.length},snapshots=${h.length}`;
+  }
+
+  return {
+    respond(input) {
+      const rule = rules.find(r => r.match.test(input));
+      return rule ? rule.reply() : "unknown";
+    },
+    analysePasswords: (v) => analysePasswords(v),
+    auditVault: (v, h) => auditVault(v, h)
+  };
+}
+
+
+const suites = [];
+let currentSuite = null;
+
+function describe(name, fn) {
+  currentSuite = { name, tests: [] };
+  suites.push(currentSuite);
+  fn();
+}
+
+function it(label, fn) {
+  currentSuite.tests.push({ label, fn });
+}
+
+function assert(condition, msg) {
+  if (!condition) throw new Error(msg || "Assertion failed");
+}
+
+function assertEqual(a, b) {
+  if (a !== b) throw new Error(`Expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`);
+}
+
+function assertThrows(fn) {
+  let threw = false;
+  try { fn(); } catch { threw = true; }
+  if (!threw) throw new Error("Expected function to throw");
+}
+
+async function assertRejects(fn) {
+  try { await fn(); throw new Error("Expected promise to reject"); }
+  catch (e) { if (e.message === "Expected promise to reject") throw e; }
+}
+
+// ─── Test suites ─────────────────────────────────────────────────────────────
+
+describe("Crypto — encrypt / decrypt", () => {
+  it("encrypts and decrypts a simple object", async () => {
+    const data = { vault: { github: { username: "user", password: "pass" } }, history: [] };
+    const ct = await Crypto.encrypt("masterpass", data);
+    const result = await Crypto.decrypt("masterpass", ct);
+    assertEqual(result.vault.github.username, "user");
+    assertEqual(result.vault.github.password, "pass");
+  });
+
+  it("decrypts to the exact same structure", async () => {
+    const data = { vault: { a: { username: "u1", password: "p1" }, b: { username: "u2", password: "p2" } }, history: [] };
+    const ct = await Crypto.encrypt("pw123", data);
+    const result = await Crypto.decrypt("pw123", ct);
+    assertEqual(Object.keys(result.vault).length, 2);
+    assertEqual(result.vault.b.password, "p2");
+  });
+
+  it("rejects wrong password", async () => {
+    const ct = await Crypto.encrypt("correct", { vault: {}, history: [] });
+    await assertRejects(() => Crypto.decrypt("wrong", ct));
+  });
+
+  it("rejects tampered ciphertext", async () => {
+    const ct = await Crypto.encrypt("pw", { vault: {}, history: [] });
+    const buf = atob(ct).split("").map(c => c.charCodeAt(0));
+    buf[buf.length - 1] ^= 0xff;
+    const tampered = btoa(String.fromCharCode(...buf));
+    await assertRejects(() => Crypto.decrypt("pw", tampered));
+  });
+
+  it("produces different ciphertext each call (random IV + salt)", async () => {
+    const data = { vault: {}, history: [] };
+    const ct1 = await Crypto.encrypt("pw", data);
+    const ct2 = await Crypto.encrypt("pw", data);
+    assert(ct1 !== ct2, "Ciphertext should differ due to random IV/salt");
+  });
+
+  it("iteration count is within safe range", () => {
+    for (let i = 0; i < 20; i++) {
+      const iter = Crypto._randomIter();
+      assert(iter >= 500000 && iter <= 800000, `iter ${iter} out of range`);
+    }
+  });
+
+  it("iter is stored and read from file header", async () => {
+    const ct = await Crypto.encrypt("pw", { vault: {}, history: [] });
+    const buf = Uint8Array.from(atob(ct), c => c.charCodeAt(0));
+    const iter = new DataView(buf.buffer).getUint32(0);
+    assert(iter >= 500000 && iter <= 800000, `iter ${iter} out of range`);
+  });
+});
+
+describe("Crypto — padding", () => {
+  it("pads to 1KB boundary", () => {
+    const str = "x".repeat(100);
+    const padded = Crypto._pad(str);
+    assert((padded.length) % 1024 === 0, "Padded length should be multiple of 1024");
+  });
+
+  it("unpad recovers original string", () => {
+    const original = JSON.stringify({ test: "hello world", n: 42 });
+    assertEqual(Crypto._unpad(Crypto._pad(original)), original);
+  });
+
+  it("hides size differences — small and large vault same block size", () => {
+    const small = Crypto._pad(JSON.stringify({ a: 1 }));
+    const large = Crypto._pad(JSON.stringify({ a: "x".repeat(900) }));
+    assertEqual(small.length % 1024, 0);
+    assertEqual(large.length % 1024, 0);
+  });
+});
+
+describe("Crypto — constant-time comparison", () => {
+  it("returns true for equal arrays", () => {
+    const a = new Uint8Array([1, 2, 3, 4]);
+    const b = new Uint8Array([1, 2, 3, 4]);
+    assert(Crypto._safeEqual(a, b));
+  });
+
+  it("returns false for different arrays", () => {
+    const a = new Uint8Array([1, 2, 3, 4]);
+    const b = new Uint8Array([1, 2, 3, 5]);
+    assert(!Crypto._safeEqual(a, b));
+  });
+
+  it("returns false for different lengths", () => {
+    const a = new Uint8Array([1, 2, 3]);
+    const b = new Uint8Array([1, 2, 3, 4]);
+    assert(!Crypto._safeEqual(a, b));
+  });
+});
+
+describe("Vault structure", () => {
+  it("encrypts vault + history together", async () => {
+    const payload = {
+      vault: { github: { username: "u", password: "p", createdAt: 1000, updatedAt: 1000 } },
+      history: [{ ts: 999, entries: {} }]
+    };
+    const ct = await Crypto.encrypt("pw", payload);
+    const result = await Crypto.decrypt("pw", ct);
+    assertEqual(result.history.length, 1);
+    assertEqual(result.history[0].ts, 999);
+  });
+
+  it("history snapshot preserves entry data", async () => {
+    const snap = { ts: Date.now(), entries: { svc: { username: "u", password: "p" } } };
+    const payload = { vault: {}, history: [snap] };
+    const ct = await Crypto.encrypt("pw", payload);
+    const result = await Crypto.decrypt("pw", ct);
+    assertEqual(result.history[0].entries.svc.password, "p");
+  });
+
+  it("empty vault encrypts and decrypts", async () => {
+    const ct = await Crypto.encrypt("pw", { vault: {}, history: [] });
+    const result = await Crypto.decrypt("pw", ct);
+    assertEqual(Object.keys(result.vault).length, 0);
+    assertEqual(result.history.length, 0);
+  });
+
+  it("vault with special characters in password", async () => {
+    const data = { vault: { svc: { username: "u@domain.com", password: "p@$$w0rd!#%" } }, history: [] };
+    const ct = await Crypto.encrypt("master", data);
+    const result = await Crypto.decrypt("master", ct);
+    assertEqual(result.vault.svc.password, "p@$$w0rd!#%");
+  });
+
+  it("vault with unicode in service name", async () => {
+    const data = { vault: { "日本語": { username: "u", password: "p" } }, history: [] };
+    const ct = await Crypto.encrypt("pw", data);
+    const result = await Crypto.decrypt("pw", ct);
+    assertEqual(result.vault["日本語"].username, "u");
+  });
+});
+
+describe("Password generator", () => {
+  it("generates password of correct length", () => {
+    for (const len of [8, 16, 20, 32, 64]) {
+      assertEqual(generatePassword({ length: len }).length, len);
+    }
+  });
+
+  it("contains uppercase when enabled", () => {
+    const pw = generatePassword({ length: 50, upper: true, lower: false, num: false, sym: false });
+    assert(/[A-Z]/.test(pw), "Should contain uppercase");
+    assert(!/[a-z]/.test(pw), "Should not contain lowercase");
+  });
+
+  it("contains lowercase when enabled", () => {
+    const pw = generatePassword({ length: 50, upper: false, lower: true, num: false, sym: false });
+    assert(/[a-z]/.test(pw), "Should contain lowercase");
+  });
+
+  it("contains numbers when enabled", () => {
+    const pw = generatePassword({ length: 50, upper: false, lower: false, num: true, sym: false });
+    assert(/[0-9]/.test(pw), "Should contain numbers");
+  });
+
+  it("contains symbols when enabled", () => {
+    const pw = generatePassword({ length: 50, upper: false, lower: false, num: false, sym: true });
+    assert(/[!@#$%^&*()\-_=+\[\]{}|;:,.<>?]/.test(pw), "Should contain symbols");
+  });
+
+  it("excludes ambiguous characters when noAmbig is set", () => {
+    for (let i = 0; i < 10; i++) {
+      const pw = generatePassword({ length: 64, noAmbig: true });
+      assert(!/[0O1lI]/.test(pw), `Ambiguous chars found in: ${pw}`);
+    }
+  });
+
+  it("returns empty string when no charset selected", () => {
+    assertEqual(generatePassword({ upper: false, lower: false, num: false, sym: false }), "");
+  });
+
+  it("guarantees at least one char from each selected set", () => {
+    for (let i = 0; i < 20; i++) {
+      const pw = generatePassword({ length: 20, upper: true, lower: true, num: true, sym: true });
+      assert(/[A-Z]/.test(pw), "Missing uppercase");
+      assert(/[a-z]/.test(pw), "Missing lowercase");
+      assert(/[0-9]/.test(pw), "Missing number");
+      assert(/[!@#$%^&*()\-_=+\[\]{}|;:,.<>?]/.test(pw), "Missing symbol");
+    }
+  });
+
+  it("generates unique passwords (CSPRNG)", () => {
+    const passwords = new Set(Array.from({ length: 20 }, () => generatePassword({ length: 20 })));
+    assert(passwords.size === 20, "All generated passwords should be unique");
+  });
+});
+
+describe("XSS sanitization", () => {
+  it("escapeHtml neutralises script tags", () => {
+    const input = "<" + "script>alert(1)<" + "/script>";
+    const expected = "&lt;" + "script&gt;alert(1)&lt;/script&gt;";
+    assertEqual(escapeHtml(input), expected);
+  });
+
+  it("escapeHtml neutralises img onerror", () => {
+    assertEqual(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+  });
+
+  it("escapeHtml neutralises attribute injection", () => {
+    assertEqual(escapeHtml('" onmouseover="alert(1)'), '&quot; onmouseover=&quot;alert(1)');
+  });
+
+  it("fuzzy html output is safe with XSS payload as service name", () => {
+    const result = fuzzy("sc", "<" + "script>alert(1)<" + "/script>");
+    assert(!result.html.includes("<" + "script>"), "Raw script tag should not appear in output");
+  });
+
+  it("fuzzy html output is safe with no query", () => {
+    const result = fuzzy("", "<img src=x onerror=alert(1)>");
+    assert(!result.html.includes("<img"), "Raw img tag should not appear in output");
+  });
+});
+
+describe("Fuzzy search", () => {
+  it("matches exact string", () => {
+    assert(fuzzy("github", "github").match);
+  });
+
+  it("matches subsequence", () => {
+    assert(fuzzy("ghb", "github").match);
+    assert(fuzzy("git", "github").match);
+  });
+
+  it("matches case-insensitively", () => {
+    assert(fuzzy("GIT", "github").match);
+    assert(fuzzy("git", "GitHub").match);
+  });
+
+  it("does not match non-subsequence", () => {
+    assert(!fuzzy("xyz", "github").match);
+    assert(!fuzzy("gti", "github").match);
+  });
+
+  it("empty query always matches", () => {
+    assert(fuzzy("", "anything").match);
+    assert(fuzzy("", "").match);
+  });
+});
+
+describe("Date filtering", () => {
+  it("matches entry created in selected month", () => {
+    const entry = { createdAt: new Date(2024, 2, 15).getTime(), updatedAt: new Date(2024, 2, 15).getTime() };
+    const selected = { year: 2024, month: 2 };
+    const matches = ts => { if (!ts) return false; const d = new Date(ts); return d.getFullYear() === selected.year && d.getMonth() === selected.month; };
+    assert(matches(entry.createdAt) || matches(entry.updatedAt));
+  });
+
+  it("does not match entry from different month", () => {
+    const entry = { createdAt: new Date(2024, 5, 10).getTime(), updatedAt: new Date(2024, 5, 10).getTime() };
+    const selected = { year: 2024, month: 2 };
+    const matches = ts => { if (!ts) return false; const d = new Date(ts); return d.getFullYear() === selected.year && d.getMonth() === selected.month; };
+    assert(!(matches(entry.createdAt) || matches(entry.updatedAt)));
+  });
+
+  it("matches entry updated in selected month even if created earlier", () => {
+    const entry = { createdAt: new Date(2023, 0, 1).getTime(), updatedAt: new Date(2024, 2, 20).getTime() };
+    const selected = { year: 2024, month: 2 };
+    const matches = ts => { if (!ts) return false; const d = new Date(ts); return d.getFullYear() === selected.year && d.getMonth() === selected.month; };
+    assert(matches(entry.createdAt) || matches(entry.updatedAt));
+  });
+});
+
+describe("Assistant — routing", () => {
+  it("greets on hello", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.respond("hello"), "greeting");
+    assertEqual(a.respond("hi"), "greeting");
+    assertEqual(a.respond("help"), "greeting");
+  });
+
+  it("routes recovery keywords", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.respond("I forgot my password"), "recovery guidance");
+    assertEqual(a.respond("wrong password"), "recovery guidance");
+    assertEqual(a.respond("can't open vault"), "recovery guidance");
+  });
+
+  it("routes corruption keywords", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.respond("vault is corrupt"), "corruption guidance");
+    assertEqual(a.respond("integrity check failed"), "corruption guidance");
+  });
+
+  it("routes security keywords", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.respond("is this safe?"), "security info");
+    assertEqual(a.respond("can someone hack this?"), "security info");
+  });
+
+  it("returns unknown for unrecognised input", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.respond("xyzzy frobulate"), "unknown");
+  });
+});
+
+describe("Assistant — password analysis", () => {
+  it("reports all good when passwords are strong and unique", () => {
+    const vault = {
+      github: { username: "u", password: "Str0ng!Pass#2024" },
+      gmail:  { username: "u", password: "An0ther$ecure!99" }
+    };
+    const a = makeAssistant(vault, []);
+    assertEqual(a.analysePasswords(vault), "all good");
+  });
+
+  it("detects weak passwords under 12 chars", () => {
+    const vault = { github: { username: "u", password: "short" } };
+    const a = makeAssistant(vault, []);
+    assert(a.analysePasswords(vault).includes("weak:github"));
+  });
+
+  it("detects reused passwords across services", () => {
+    const vault = {
+      github: { username: "u", password: "samepassword123" },
+      gmail:  { username: "u", password: "samepassword123" }
+    };
+    const a = makeAssistant(vault, []);
+    assert(a.analysePasswords(vault).includes("reused"));
+  });
+
+  it("detects both weak and reused", () => {
+    const vault = {
+      github: { username: "u", password: "weak" },
+      gmail:  { username: "u", password: "weak" }
+    };
+    const a = makeAssistant(vault, []);
+    const result = a.analysePasswords(vault);
+    assert(result.includes("weak"));
+    assert(result.includes("reused"));
+  });
+
+  it("returns vault empty when vault is empty", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.analysePasswords({}), "vault empty");
+  });
+});
+
+describe("Assistant — vault audit", () => {
+  it("reports healthy vault", () => {
+    const vault = {
+      github: { username: "u", password: "Str0ng!Pass#2024", createdAt: 1000, updatedAt: 1000 }
+    };
+    const a = makeAssistant(vault, []);
+    assert(a.auditVault(vault, []).startsWith("healthy:") && a.auditVault(vault, []).includes("snapshots=0"));
+  });
+
+  it("reports issues when weak passwords exist", () => {
+    const vault = { svc: { username: "u", password: "abc", createdAt: 1000, updatedAt: 1000 } };
+    const a = makeAssistant(vault, []);
+    assert(a.auditVault(vault, []).includes("weak=1"));
+  });
+
+  it("reports issues when entries have no date", () => {
+    const vault = { svc: { username: "u", password: "Str0ng!Pass#2024" } };
+    const a = makeAssistant(vault, []);
+    assert(a.auditVault(vault, []).includes("nodate=1"));
+  });
+
+  it("includes snapshot count in audit", () => {
+    const vault = { svc: { username: "u", password: "Str0ng!Pass#2024", createdAt: 1, updatedAt: 1 } };
+    const snaps = [{ ts: 1, entries: {} }, { ts: 2, entries: {} }];
+    const a = makeAssistant(vault, snaps);
+    assert(a.auditVault(vault, snaps).includes("snapshots=2"));
+  });
+
+  it("returns vault empty when vault is empty", () => {
+    const a = makeAssistant({}, []);
+    assertEqual(a.auditVault({}, []), "vault empty");
+  });
+});
+
+// ─── Runner ──────────────────────────────────────────────────────────────────
+document.getElementById("run-btn").onclick = async () => {
+  const out = document.getElementById("output");
+  const summary = document.getElementById("summary");
+  out.innerHTML = "";
+  summary.innerHTML = "";
+
+  let passed = 0, failed = 0;
+
+  for (const suite of suites) {
+    const suiteEl = document.createElement("div");
+    suiteEl.className = "suite";
+    suiteEl.innerHTML = `<div class="suite-name">${suite.name}</div>`;
+
+    for (const test of suite.tests) {
+      const row = document.createElement("div");
+      row.className = "test";
+      try {
+        await test.fn();
+        row.innerHTML = `<span class="badge pass">PASS</span><span class="label">${test.label}</span>`;
+        passed++;
+      } catch (e) {
+        row.innerHTML = `<span class="badge fail">FAIL</span><span class="label">${test.label}<div class="err">↳ ${e.message}</div></span>`;
+        failed++;
+      }
+      suiteEl.appendChild(row);
+    }
+    out.appendChild(suiteEl);
+  }
+
+  const total = passed + failed;
+  summary.className = failed === 0 ? "ok" : "err";
+  summary.textContent = failed === 0
+    ? `✅ All ${total} tests passed`
+    : `❌ ${failed} of ${total} tests failed`;
+};
+</script>
+</body>
+</html>

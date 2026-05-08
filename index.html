@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pasamayo — Encrypted Password Manager</title>
+<meta name="description" content="A minimal encrypted password manager in a single HTML file. No server. No account. No dependencies.">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#e94560">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+a { color: #e94560; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* NAV */
+nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #1e1e3a; }
+.logo { font-size: 18px; font-weight: 800; color: #e94560; }
+.nav-links { display: flex; gap: 24px; font-size: 13px; color: #555; }
+.nav-links a { color: #555; }
+.nav-links a:hover { color: #e94560; text-decoration: none; }
+
+/* HERO */
+.hero { max-width: 640px; margin: 0 auto; padding: 80px 24px 60px; text-align: center; }
+.hero h1 { font-size: 42px; font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
+.hero h1 span { color: #e94560; }
+.hero p { font-size: 17px; color: #888; line-height: 1.6; margin-bottom: 36px; }
+.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn-download { background: #e94560; color: #fff; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 700; }
+.btn-download:hover { background: #c73652; text-decoration: none; }
+.btn-donate { background: #16213e; color: #eee; padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 700; border: 1px solid #2a2a4a; }
+.btn-donate:hover { border-color: #e94560; color: #e94560; text-decoration: none; }
+.hint { font-size: 12px; color: #333; margin-top: 12px; }
+
+/* FEATURES */
+.features { max-width: 800px; margin: 0 auto; padding: 60px 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.feature { background: #16213e; border: 1px solid #1e1e3a; border-radius: 10px; padding: 20px; }
+.feature .icon { font-size: 24px; margin-bottom: 10px; }
+.feature h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.feature p { font-size: 12px; color: #555; line-height: 1.5; }
+
+/* HOW IT WORKS */
+.how { max-width: 560px; margin: 0 auto; padding: 20px 24px 60px; text-align: center; }
+.how h2 { font-size: 22px; font-weight: 700; margin-bottom: 32px; }
+.steps { display: flex; flex-direction: column; gap: 16px; text-align: left; }
+.step { display: flex; gap: 16px; align-items: flex-start; }
+.step-num { background: #e94560; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.step-text h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.step-text p { font-size: 12px; color: #555; }
+
+/* SECURITY */
+.security { background: #16213e; border-top: 1px solid #1e1e3a; border-bottom: 1px solid #1e1e3a; padding: 60px 24px; text-align: center; }
+.security h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.security .sub { font-size: 13px; color: #555; margin-bottom: 32px; }
+.security-grid { max-width: 700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; text-align: left; }
+.sec-item { padding: 14px; border: 1px solid #2a2a4a; border-radius: 8px; }
+.sec-item h4 { font-size: 12px; font-weight: 700; color: #e94560; margin-bottom: 4px; }
+.sec-item p { font-size: 11px; color: #555; line-height: 1.5; }
+
+/* FOOTER */
+footer { padding: 32px 40px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid #1e1e3a; font-size: 12px; color: #333; }
+footer a { color: #555; }
+footer a:hover { color: #e94560; }
+.footer-links { display: flex; gap: 20px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">🔐 Pasamayo</span>
+  <div class="nav-links">
+    <a href="https://github.com/YOUR_USERNAME/pasamayo">GitHub</a>
+    <a href="/app/">Open app</a>
+    <a href="https://ko-fi.com/YOUR_KOFI">Donate</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <h1>Your passwords.<br><span>Encrypted. Yours alone.</span></h1>
+  <p>A single HTML file. No server. No account. No cloud. Your vault lives on your disk, encrypted with AES-256-GCM. Open it in any browser on any device.</p>
+  <div class="cta">
+    <a class="btn-download" href="/app/index.html" download="pasamayo.html">⬇ Download free</a>
+    <a class="btn-donate" href="https://ko-fi.com/YOUR_KOFI" target="_blank">☕ Buy me a coffee</a>
+  </div>
+  <p class="hint">One file. No install. Works on Windows, Mac, Linux, iPhone, Android.</p>
+</section>
+
+<section class="features">
+  <div class="feature">
+    <div class="icon">📄</div>
+    <h3>Single file</h3>
+    <p>The entire app is one HTML file. Download it, open it, use it. No install, no setup, no dependencies.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🔒</div>
+    <h3>AES-256-GCM encryption</h3>
+    <p>Your vault is encrypted with the same standard used by banks and governments. Master password never leaves your device.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">📡</div>
+    <h3>Fully offline</h3>
+    <p>No network requests. No telemetry. No analytics. Works on a plane, in a bunker, anywhere.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">💾</div>
+    <h3>File-based vault</h3>
+    <p>Your data lives in a <code>.pasamayo</code> file on your disk. Copy it anywhere. Back it up. You own it.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🔄</div>
+    <h3>Rolling backups</h3>
+    <p>Last 5 snapshots stored inside the encrypted file. Restore any previous state in one click.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🔍</div>
+    <h3>Fuzzy search</h3>
+    <p>Find any entry instantly. Filter by name, username, or month. Paginated for large vaults.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">⚙️</div>
+    <h3>Password generator</h3>
+    <p>CSPRNG-based generator with configurable charset, length, and ambiguous character exclusion.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">🤖</div>
+    <h3>Offline assistant</h3>
+    <p>Built-in helper for recovery, weak password detection, vault health audits, and feature guidance.</p>
+  </div>
+  <div class="feature">
+    <div class="icon">📖</div>
+    <h3>Open source</h3>
+    <p>MIT license. Read every line of code. No hidden behaviour. No obfuscation.</p>
+  </div>
+</section>
+
+<section class="how">
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <h4>Download the file</h4>
+        <p>One HTML file. ~50KB. No install required.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <h4>Create your vault</h4>
+        <p>Set a master password. A <code>.pasamayo</code> file is saved to your disk.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <h4>Add your passwords</h4>
+        <p>Service, username, password. Saved and encrypted instantly.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">
+        <h4>Use it anywhere</h4>
+        <p>Copy the <code>.pasamayo</code> file to any device. Open with any browser. Unlock with your master password.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="security">
+  <h2>Security model</h2>
+  <p class="sub">Built on the browser's native Web Crypto API. No custom crypto. No third-party libraries.</p>
+  <div class="security-grid">
+    <div class="sec-item">
+      <h4>AES-256-GCM</h4>
+      <p>Authenticated encryption. The vault is a single encrypted blob — no partial access possible.</p>
+    </div>
+    <div class="sec-item">
+      <h4>PBKDF2 + SHA-512</h4>
+      <p>Randomised iteration count per vault. Attacker cannot pre-optimise cracking without reading the file first.</p>
+    </div>
+    <div class="sec-item">
+      <h4>HMAC integrity</h4>
+      <p>Wrong password fails before decryption is attempted. No decryption oracle exposed.</p>
+    </div>
+    <div class="sec-item">
+      <h4>Constant-time comparison</h4>
+      <p>HMAC verified without short-circuiting. Prevents timing attacks.</p>
+    </div>
+    <div class="sec-item">
+      <h4>Payload padding</h4>
+      <p>File size reveals nothing about entry count or password lengths.</p>
+    </div>
+    <div class="sec-item">
+      <h4>Zero browser storage</h4>
+      <p>No localStorage. No cookies. No cache. Nothing persists in the browser.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>© 2024 Pasamayo — <a href="/LICENSE">AGPL-3.0</a> • <a href="/COMMERCIAL.md">Commercial license</a></span>
+  <div class="footer-links">
+    <a href="https://github.com/YOUR_USERNAME/pasamayo">GitHub</a>
+    <a href="https://github.com/YOUR_USERNAME/pasamayo/blob/main/README.md">Docs</a>
+    <a href="https://ko-fi.com/YOUR_KOFI" target="_blank">Donate</a>
+    <a href="/app/">Open app</a>
+  </div>
+</footer>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
+</body>
+</html>
