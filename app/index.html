@@ -22,7 +22,7 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 13px; fon
 .btn-sm:hover { background: #e94560; color: #fff; }
 .btn-ghost { background: none; color: #555; font-size: 12px; padding: 6px 0; width: 100%; margin-top: 8px; }
 .btn-ghost:hover { color: #e94560; }
-.hidden { display: none; }
+.trust { font-size: 11px; color: #2a6e3f; background: #0a3a1a; border: 1px solid #1a5c30; border-radius: 4px; padding: 4px 8px; margin-bottom: 12px; text-align: center; }
 /* lock screen */
 #lock { }
 .or { text-align: center; color: #333; font-size: 12px; margin: 8px 0; }
@@ -93,6 +93,7 @@ button { cursor: pointer; border: none; border-radius: 6px; font-size: 13px; fon
   <div id="lock">
     <h1>🔐 Pasamayo</h1>
     <p class="sub">Your passwords, encrypted, yours alone.</p>
+    <p class="trust">✅ You are on <strong>pasamayo.app</strong> — the only official site.</p>
     <input type="file" id="vault-file" accept=".pasamayo" class="hidden">
     <input type="password" id="master" placeholder="Master password">
     <button class="btn-primary" id="open-btn">Open vault</button>
