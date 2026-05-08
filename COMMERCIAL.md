@@ -33,9 +33,11 @@ a commercial license.
 
 ## How to purchase
 
-Contact: YOUR_EMAIL
+Contact: hello@pasamayo.app
 
 Or purchase self-serve at: YOUR_PAYMENT_LINK
+
+> Payment link coming soon — contact hello@pasamayo.app in the meantime.
 
 ## What the commercial license grants
 
@@ -53,4 +55,4 @@ Or purchase self-serve at: YOUR_PAYMENT_LINK
 
 ## Questions
 
-Contact YOUR_EMAIL with any licensing questions.
+Contact hello@pasamayo.app with any licensing questions.
