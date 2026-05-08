@@ -26,9 +26,9 @@ a commercial license.
 
 | Tier | Price | Seats | Includes |
 |------|-------|-------|----------|
-| Solo | $29 one-time | 1 developer | Lifetime license for 1 developer |
-| Team | $99 one-time | Up to 10 developers | Lifetime license for up to 10 developers |
-| Business | $299/year | Unlimited | Unlimited developers + priority support |
+| Solo | $29 one-time | 1 developer | Lifetime license for 1 developer — [Buy now](https://victorh05.gumroad.com/l/wtsme) |
+| Team | $99 one-time | Up to 10 developers | Lifetime license for up to 10 developers — [Buy now](https://victorh05.gumroad.com/l/nonms) |
+| Business | $299/year | Unlimited | Unlimited developers + priority support — contact hello@pasamayo.app |
 | Enterprise | Custom | Unlimited | Custom SLA + dedicated support + custom features |
 
 ## How to purchase
