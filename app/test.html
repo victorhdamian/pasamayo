@@ -189,8 +189,8 @@ function makeAssistant(vault, history) {
     const reused = Object.values(pwMap).filter(s => s.length > 1);
     if (!weak.length && !reused.length) return "all good";
     const lines = [];
-    if (weak.length) lines.push(`weak:${weak.map(([k]) => k).join(",")}`);
-    if (reused.length) lines.push(`reused:${reused.map(s => s.join("&")).join("|")}`);
+    if (weak.length) lines.push(`weak:${weak.map(([k]) => escapeHtml(k)).join(",")}`);
+    if (reused.length) lines.push(`reused:${reused.map(s => s.map(escapeHtml).join("&")).join("|")}`);
     return lines.join("\n");
   }
 
@@ -582,6 +582,26 @@ describe("Assistant — password analysis", () => {
     const result = a.analysePasswords(vault);
     assert(result.includes("weak"));
     assert(result.includes("reused"));
+  });
+
+  it("sanitizes XSS in service names when reporting weak passwords", () => {
+    const xss = "<img src=x onerror=alert(1)>";
+    const vault = { [xss]: { username: "u", password: "weak" } };
+    const a = makeAssistant(vault, []);
+    const result = a.analysePasswords(vault);
+    assert(!result.includes("<img"), "Raw HTML should not appear in analysePasswords output");
+    assert(result.includes("&lt;img"), "Service name should be HTML-escaped");
+  });
+
+  it("sanitizes XSS in service names when reporting reused passwords", () => {
+    const xss = "<" + "script>alert(1)</" + "script>";
+    const vault = {
+      [xss]: { username: "u", password: "samepassword123" },
+      normal: { username: "u", password: "samepassword123" }
+    };
+    const a = makeAssistant(vault, []);
+    const result = a.analysePasswords(vault);
+    assert(!result.includes("<script"), "Raw script tag should not appear in output");
   });
 
   it("returns vault empty when vault is empty", () => {
