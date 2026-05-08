@@ -684,8 +684,8 @@ const Assistant = (() => {
     entries.forEach(([k, v]) => { (pwMap[v.password] = pwMap[v.password] || []).push(k); });
     const reused = Object.values(pwMap).filter(s => s.length > 1);
     const lines = [];
-    if (weak.length) lines.push(`⚠️ Weak passwords (under 12 chars): ${weak.map(([k]) => k).join(", ")}`);
-    if (reused.length) lines.push(`♻️ Reused passwords: ${reused.map(s => s.join(" & ")).join(" | ")}`);
+    if (weak.length) lines.push(`⚠️ Weak passwords (under 12 chars): ${weak.map(([k]) => escapeHtml(k)).join(", ")}`);
+    if (reused.length) lines.push(`♻️ Reused passwords: ${reused.map(s => s.map(escapeHtml).join(" & ")).join(" | ")}`);
     if (!lines.length) return `✅ All ${entries.length} passwords look good — no weak or reused passwords found.`;
     return lines.join("\n") + `\n\nUse the <a onclick="$(\"gen-btn\").click()">⚙️ generator</a> to replace them.`;
   }

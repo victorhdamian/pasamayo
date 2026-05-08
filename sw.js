@@ -1,4 +1,4 @@
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'pasamayo-' + VERSION;
 const FILES = ['/app/', '/app/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 
