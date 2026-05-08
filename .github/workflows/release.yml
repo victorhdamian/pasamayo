@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Copy app with version filename
+        run: cp app/index.html pasamayo-${{ steps.version.outputs.VERSION }}.html
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Pasamayo ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Pasamayo ${{ steps.version.outputs.VERSION }}
+
+            ### Install
+            1. Download `pasamayo-${{ steps.version.outputs.VERSION }}.html`
+            2. Open it in any browser
+            3. Create or open your vault
+
+            ### What's new
+            See [CHANGELOG.md](https://github.com/victorhdamian/pasamayo/blob/main/CHANGELOG.md) for details.
+
+            ### Verify
+            Run the test harness: open `test.html` in your browser and click ▶ Run all tests.
+          files: pasamayo-${{ steps.version.outputs.VERSION }}.html
+          draft: false
+          prerelease: false
