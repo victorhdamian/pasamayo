@@ -35,9 +35,9 @@ a commercial license.
 
 Contact: hello@pasamayo.app
 
-Or purchase self-serve at: YOUR_PAYMENT_LINK
+Or purchase self-serve at: https://victorh05.gumroad.com/l/wtsme
 
-> Payment link coming soon — contact hello@pasamayo.app in the meantime.
+> Team and Business licenses coming soon — contact hello@pasamayo.app in the meantime.
 
 ## What the commercial license grants
 
