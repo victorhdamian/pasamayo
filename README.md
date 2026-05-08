@@ -2,16 +2,18 @@
 
 A minimal KV password manager in a single HTML file. No install, no server, no dependencies.
 
+🌐 **[pasamayo.app](https://pasamayo.app)** — download, donate, or open the app directly in your browser.
+
 ## How to Use
 
-1. Download `index.html`
-2. Open it in any browser
+1. Visit [pasamayo.app](https://pasamayo.app) and click **Download free**
+2. Open `pasamayo.html` in any browser
 3. Click **"Create new vault"**, set a master password → saves a `.pasamayo` file to your disk
-4. Next time: open `index.html`, click **"Open vault"**, pick your `.pasamayo` file, enter master password
+4. Next time: open the app, click **"Open vault"**, pick your `.pasamayo` file, enter master password
 
 ## Features
 
-- **Single file** — one `index.html`, works offline, runs anywhere
+- **Single file** — one HTML file, works offline, runs anywhere
 - **File-based vault** — your data lives in a `.pasamayo` file on your disk, not in the browser
 - **AES-256-GCM** encryption with PBKDF2 + SHA-512 key derivation
 - **Randomised iteration count** — unique per vault, stored in the file header
@@ -23,9 +25,10 @@ A minimal KV password manager in a single HTML file. No install, no server, no d
 - **Month filter** — calendar picker to filter entries by creation or update month
 - **Paginated list** — 10 entries per page, works with search and date filter
 - **Assistant** — offline rule-based helper for recovery, security questions, and weak password detection
+- **XSS protection** — all user input sanitized before rendering
 - **Zero dependencies** — no frameworks, no build step, no server
 - **Portable** — copy `.pasamayo` to any machine, open with any browser
-- **Open source** — MIT license, read every line of code yourself
+- **Open source** — AGPL-3.0, read every line of code yourself
 
 ## Data Model
 
@@ -98,6 +101,7 @@ Before every save, the current vault state is pushed into a history stack of up 
 | Constant-time comparison | HMAC bytes compared without short-circuiting — prevents timing attacks that infer how many bytes matched |
 | Payload padding (1KB blocks) | Encrypted file size reveals nothing about entry count or password lengths |
 | Independent key derivation | Encryption key and HMAC key use separate salts — compromising one does not help with the other |
+| XSS sanitization | All user-controlled data escaped before rendering — prevents script injection via vault entries |
 
 ### Vault File Layout
 
@@ -119,22 +123,37 @@ iter(4) | salt(16) | hSalt(16) | iv(12) | mac(32) | ciphertext
 | Chrome / Edge | Native file picker, writes back in place | Silent in-place update |
 | Firefox / Safari | File picker | Downloads updated file |
 
+## Project Structure
+
+```
+/                       ← landing page (pasamayo.app)
+/app/index.html         ← the password manager
+/app/test.html          ← test harness
+/manifest.json          ← PWA manifest
+/sw.js                  ← service worker (offline support)
+/icons/                 ← app icons
+```
+
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `index.html` | The app — open this in any browser |
-| `test.html` | Test harness — open in browser to run all tests |
+| `app/index.html` | The app — open this in any browser |
+| `app/test.html` | Test harness — open in browser to run all tests |
 | `*.pasamayo` | Your encrypted vault — keep this safe |
 | `README.md` | This file |
-| `pasamayo_specs.md` | Full technical and product specification |
-| `pasamayo_dilemmas.md` | Architectural decisions and rejected directions |
+| `COMMERCIAL.md` | Commercial licensing terms |
+| `SECURITY.md` | Security policy and vulnerability reporting |
 
 ## Testing
 
-Open `test.html` in any browser and click **▶ Run all tests**.
+Serve locally and open `http://localhost:8080/app/test.html`, then click **▶ Run all tests**.
 
-Covers 50 tests across 10 suites:
+```bash
+python3 -m http.server 8080
+```
+
+Covers 55 tests across 10 suites:
 - Crypto encrypt / decrypt
 - Padding and unpadding
 - Constant-time comparison
@@ -145,6 +164,12 @@ Covers 50 tests across 10 suites:
 - Date filtering
 - Assistant routing
 - Assistant password analysis and vault audit
+
+## Contributing
+
+Security vulnerabilities: see [SECURITY.md](SECURITY.md).
+
+All other contributions: open a pull request against `main`.
 
 ## License
 
